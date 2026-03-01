@@ -4,6 +4,7 @@ export interface Expense {
   description?: string;
   category: string;
   amount: number;
+  created_at: string;
 }
 
-export type NewExpense = Omit<Expense, 'id'>;
+export type NewExpense = Omit<Expense, 'id' | 'created_at'>;

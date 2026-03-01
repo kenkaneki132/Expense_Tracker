@@ -1,14 +1,14 @@
-import type { Expense } from '../types';
+import type { Expense, NewExpense } from '../types';
 import ExpenseForm from './ExpenseForm';
 import { useState } from 'react';
 
 interface Props {
   expenses: Expense[];
   onDelete: (id: number) => void;
-  onUpdate: (id: number, data: Omit<Expense, 'id'>) => void;
+  onUpdate: (id: number, data: NewExpense) => void;
 }
 
-type SortColumn = 'title' | 'description' | 'category' | 'amount' | null;
+type SortColumn = 'title' | 'description' | 'category' | 'amount' | 'created_at' | null;
 type SortDirection = 'asc' | 'desc' | null;
 
 export default function ExpenseList({ expenses, onDelete, onUpdate }: Props) {
@@ -62,6 +62,32 @@ export default function ExpenseList({ expenses, onDelete, onUpdate }: Props) {
     return sortDirection === 'asc' ? ' ↑' : ' ↓';
   };
 
+  const downloadCSV = () => {
+    if (expenses.length === 0) {
+      alert('No data available to download');
+      return;
+    }
+
+    const hdrs = ['Title','Description','Category','Amount','Created Date'];
+    const rows = expenses.map(e => [
+      '"' + e.title.replace(/"/g,'""') + '"',
+      '"' + (e.description||'').replace(/"/g,'""') + '"',
+      '"' + e.category.replace(/"/g,'""') + '"',
+      e.amount,
+      new Date(e.created_at).toISOString(),
+    ].join(','));
+    const csv = [hdrs.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'expenses.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (editingId !== null) {
     const e = expenses.find(x => x.id === editingId);
     if (!e) return null;
@@ -78,8 +104,9 @@ export default function ExpenseList({ expenses, onDelete, onUpdate }: Props) {
   }
 
   return (
-    <div className="expense-table-container">
-      <table className="expense-table">
+    <div className="expense-table-wrapper">
+      <div className="expense-table-container">
+        <table className="expense-table">
         <thead>
           <tr>
             <th onClick={() => handleSort('title')} style={{ cursor: 'pointer' }}>
@@ -94,6 +121,9 @@ export default function ExpenseList({ expenses, onDelete, onUpdate }: Props) {
             <th onClick={() => handleSort('amount')} style={{ cursor: 'pointer' }}>
               Amount{getSortIndicator('amount')}
             </th>
+            <th onClick={() => handleSort('created_at')} style={{ cursor: 'pointer' }}>
+              Created Date{getSortIndicator('created_at')}
+            </th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -104,6 +134,7 @@ export default function ExpenseList({ expenses, onDelete, onUpdate }: Props) {
               <td>{e.description}</td>
               <td>{e.category}</td>
               <td>{e.amount}</td>
+              <td>{new Date(e.created_at).toLocaleString()}</td>
               <td>
                 <button className="btn btn-edit" onClick={() => setEditingId(e.id)}>Edit</button>
                 <button className="btn btn-delete" onClick={() => onDelete(e.id)}>Delete</button>
@@ -112,6 +143,8 @@ export default function ExpenseList({ expenses, onDelete, onUpdate }: Props) {
           ))}
         </tbody>
       </table>
+    </div>
+      <button className="btn btn-submit" style={{ marginTop: '1rem' }} onClick={downloadCSV}>Download CSV</button>
     </div>
   );
 }

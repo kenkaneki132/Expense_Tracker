@@ -3,7 +3,7 @@
 This workspace contains a React single-page application for tracking expenses (frontend) and a Node/Express backend with a PostgreSQL database.
 
 ```sql
-CREATE TABLE expenses (
+CREATE TABLE expense (
     id SERIAL PRIMARY KEY,
     title TEXT NOT NULL,
     description TEXT,

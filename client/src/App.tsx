@@ -42,14 +42,20 @@ function App() {
 
   return (
     <div className="app">
-      <h1>Expense tracker</h1>
-      <ExpenseForm onSubmit={handleAdd} />
-      <ExpenseFilter value={filter} onChange={setFilter} />
-      <ExpenseList
-        expenses={expenses}
-        onDelete={handleDelete}
-        onUpdate={handleUpdate}
-      />
+      <h1 className="app-title">Expense tracker</h1>
+      <div className="app-container">
+        <div className="app-left">
+          <ExpenseForm onSubmit={handleAdd} />
+        </div>
+        <div className="app-right">
+          <ExpenseFilter value={filter} onChange={setFilter} />
+          <ExpenseList
+            expenses={expenses}
+            onDelete={handleDelete}
+            onUpdate={handleUpdate}
+          />
+        </div>
+      </div>
     </div>
   );
 }

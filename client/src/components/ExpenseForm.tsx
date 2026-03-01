@@ -57,8 +57,8 @@ export default function ExpenseForm({ existing, onSubmit, onCancel }: Props) {
         <label>Amount*</label>
         <input value={amount} onChange={e => setAmount(e.target.value)} />
       </div>
-      <button type="submit">{existing ? 'Update' : 'Add'} Expense</button>
-      {onCancel && <button type="button" onClick={onCancel}>Cancel</button>}
+      <button type="submit" className="btn btn-submit">{existing ? 'Update' : 'Add'} Expense</button>
+      {onCancel && <button type="button" className="btn btn-cancel" onClick={onCancel}>Cancel</button>}
     </form>
   );
 }

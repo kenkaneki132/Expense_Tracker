@@ -19,11 +19,15 @@ CREATE TABLE expense (
    ```bash
    cd backend
    npm install
-   # copy .env.example to .env and fill in your Postgres connection string
-   # e.g. DATABASE_URL=postgres://user:pass@localhost:5432/expense_tracker
    ```
-
-2. Create the database and run the initialization script:
+2. Update Db String 
+    ```
+    in backend/.env file update user and pass with DB User Name and DB User Password
+     e.g. DATABASE_URL=postgres://user:pass@localhost:5432/expense_tracker
+    ```
+3. Install Postgresql and create a user 
+    https://www.enterprisedb.com/downloads/postgres-postgresql-downloads
+3. Create the database and run the initialization script:
 
    ```bash
    # using psql
@@ -31,7 +35,7 @@ CREATE TABLE expense (
    psql expense_tracker -f init.sql
    ```
 
-3. Start the server in development mode (with hot restart):
+4. Start the server in development mode (with hot restart):
 
    ```bash
    npm run dev
@@ -47,3 +51,13 @@ curl -X POST -H "Content-Type: application/json" \
      -d '{"title":"Coffee","category":"Food","amount":3}' \
      http://localhost:3001/expenses
 ```
+5. Install dependencies for the front end
+   ```
+   cd client
+   npm install
+   ```
+6. run the front end
+   ```
+   npm run dev
+   ```
+   The application start on http://localhost:5173/

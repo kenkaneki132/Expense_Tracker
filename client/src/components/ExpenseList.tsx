@@ -1,17 +1,36 @@
+import type { ReactNode } from 'react';
 import type { Expense, NewExpense } from '../types';
+import { formatMoney, toCSV } from '../lib/expenses';
+import { categoryColor } from '../lib/categoryColors';
 import ExpenseForm from './ExpenseForm';
+import Icon from './Icon';
 import { useState } from 'react';
 
 interface Props {
   expenses: Expense[];
   onDelete: (id: number) => void;
-  onUpdate: (id: number, data: NewExpense) => void;
+  onUpdate: (id: number, data: NewExpense) => Promise<void>;
+  /** Controls shown in the list header (filter etc.). */
+  tools?: ReactNode;
+  /** Shown in the empty state, e.g. a "load sample data" button. */
+  emptyAction?: ReactNode;
+  filtered?: boolean;
+  loading?: boolean;
 }
 
 type SortColumn = 'title' | 'description' | 'category' | 'amount' | 'created_at' | null;
 type SortDirection = 'asc' | 'desc' | null;
 
-export default function ExpenseList({ expenses, onDelete, onUpdate }: Props) {
+const COLUMNS: { key: Exclude<SortColumn, null>; label: string; num?: boolean }[] = [
+  { key: 'title', label: 'Expense' },
+  { key: 'category', label: 'Category' },
+  { key: 'amount', label: 'Amount', num: true },
+  { key: 'created_at', label: 'Date' },
+];
+
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+export default function ExpenseList({ expenses, onDelete, onUpdate, tools, emptyAction, filtered, loading }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
@@ -57,10 +76,8 @@ export default function ExpenseList({ expenses, onDelete, onUpdate }: Props) {
     return sorted;
   };
 
-  const getSortIndicator = (column: SortColumn) => {
-    if (sortColumn !== column) return '';
-    return sortDirection === 'asc' ? ' ↑' : ' ↓';
-  };
+  const ariaSort = (column: SortColumn) =>
+    sortColumn !== column || !sortDirection ? 'none' : sortDirection === 'asc' ? 'ascending' : 'descending';
 
   const downloadCSV = () => {
     if (expenses.length === 0) {
@@ -68,15 +85,7 @@ export default function ExpenseList({ expenses, onDelete, onUpdate }: Props) {
       return;
     }
 
-    const hdrs = ['Title','Description','Category','Amount','Created Date'];
-    const rows = expenses.map(e => [
-      '"' + e.title.replace(/"/g,'""') + '"',
-      '"' + (e.description||'').replace(/"/g,'""') + '"',
-      '"' + e.category.replace(/"/g,'""') + '"',
-      e.amount,
-      new Date(e.created_at).toISOString(),
-    ].join(','));
-    const csv = [hdrs.join(','), ...rows].join('\n');
+    const csv = toCSV(expenses);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -88,63 +97,83 @@ export default function ExpenseList({ expenses, onDelete, onUpdate }: Props) {
     URL.revokeObjectURL(url);
   };
 
-  if (editingId !== null) {
-    const e = expenses.find(x => x.id === editingId);
-    if (!e) return null;
-    return (
-      <ExpenseForm
-        existing={e}
-        onSubmit={data => {
-          onUpdate(editingId, data);
-          setEditingId(null);
-        }}
-        onCancel={() => setEditingId(null)}
-      />
-    );
-  }
+  const editing = editingId !== null ? expenses.find(x => x.id === editingId) : undefined;
 
   return (
-    <div className="expense-table-wrapper">
-      <div className="expense-table-container">
-        <table className="expense-table">
-        <thead>
-          <tr>
-            <th onClick={() => handleSort('title')} style={{ cursor: 'pointer' }}>
-              Title{getSortIndicator('title')}
-            </th>
-            <th onClick={() => handleSort('description')} style={{ cursor: 'pointer' }}>
-              Description{getSortIndicator('description')}
-            </th>
-            <th onClick={() => handleSort('category')} style={{ cursor: 'pointer' }}>
-              Category{getSortIndicator('category')}
-            </th>
-            <th onClick={() => handleSort('amount')} style={{ cursor: 'pointer' }}>
-              Amount{getSortIndicator('amount')}
-            </th>
-            <th onClick={() => handleSort('created_at')} style={{ cursor: 'pointer' }}>
-              Created Date{getSortIndicator('created_at')}
-            </th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {getSortedExpenses().map(e => (
-            <tr key={e.id}>
-              <td>{e.title}</td>
-              <td>{e.description}</td>
-              <td>{e.category}</td>
-              <td>{e.amount}</td>
-              <td>{new Date(e.created_at).toLocaleString()}</td>
-              <td>
-                <button className="btn btn-edit" onClick={() => setEditingId(e.id)}>Edit</button>
-                <button className="btn btn-delete" onClick={() => onDelete(e.id)}>Delete</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-      <button className="btn btn-submit" style={{ marginTop: '1rem' }} onClick={downloadCSV}>Download CSV</button>
-    </div>
+    <section className="card list-card" aria-label="Expenses">
+      <div className="list-toolbar">
+        <div>
+          <h2 className="card-title">Expenses</h2>
+          <p className="card-sub">{loading ? 'Loading…' : `${expenses.length} ${expenses.length === 1 ? 'entry' : 'entries'}${filtered ? ' in this category' : ''}`}</p>
+        </div>
+        <div className="list-tools">
+          {tools}
+          <button className="btn btn-secondary" onClick={downloadCSV} disabled={expenses.length === 0}>
+            <Icon name="download" size={16} /> CSV
+          </button>
+        </div>
+      </div>
+
+      {editing ? (
+        <div className="edit-panel">
+          <ExpenseForm
+            existing={editing}
+            onSubmit={async data => {
+              await onUpdate(editing.id, data);
+              setEditingId(null);
+            }}
+            onCancel={() => setEditingId(null)}
+          />
+        </div>
+      ) : loading ? (
+        <p className="loading">Loading expenses…</p>
+      ) : expenses.length === 0 ? (
+        <div className="empty">
+          <div className="empty-icon"><Icon name="inbox" size={24} /></div>
+          <h3>{filtered ? 'Nothing in this category yet' : 'No expenses yet'}</h3>
+          <p>{filtered ? 'Pick another category or add an expense.' : 'Add your first expense with the form, or start from sample data.'}</p>
+          {emptyAction}
+        </div>
+      ) : (
+        <div className="expense-table-container">
+          <table className="expense-table">
+            <thead>
+              <tr>
+                {COLUMNS.map(c => (
+                  <th key={c.key} className={c.num ? 'num' : undefined} aria-sort={ariaSort(c.key)} scope="col">
+                    <button type="button" onClick={() => handleSort(c.key)}>
+                      {c.label}
+                      <span className="sort-icon">
+                        <Icon name={sortColumn === c.key && sortDirection ? (sortDirection === 'asc' ? 'up' : 'down') : 'sort'} size={13} />
+                      </span>
+                    </button>
+                  </th>
+                ))}
+                <th scope="col"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {getSortedExpenses().map(e => (
+                <tr key={e.id}>
+                  <td className="t-title">
+                    <strong>{e.title}</strong>
+                    {e.description && <span>{e.description}</span>}
+                  </td>
+                  <td className="t-cat">
+                    <span className="chip"><i className="dot" style={{ background: categoryColor(e.category) }} />{e.category}</span>
+                  </td>
+                  <td className="amount">{formatMoney(e.amount)}</td>
+                  <td className="date" title={new Date(e.created_at).toLocaleString()}>{shortDate(e.created_at)}</td>
+                  <td className="row-actions">
+                    <button className="icon-btn" onClick={() => setEditingId(e.id)} aria-label={`Edit ${e.title}`} title="Edit"><Icon name="pencil" size={16} /></button>
+                    <button className="icon-btn danger" onClick={() => onDelete(e.id)} aria-label={`Delete ${e.title}`} title="Delete"><Icon name="trash" size={16} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

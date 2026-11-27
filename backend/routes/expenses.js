@@ -1,74 +1,55 @@
 import express from 'express';
-import pool from '../db.js';
+import { CATEGORIES, parseId, validateExpense } from '../validation.js';
 
-const router = express.Router();
+// Wrap async handlers so unexpected errors become a 500 instead of an unhandled rejection.
+const handle = (fn) => (req, res) =>
+  Promise.resolve(fn(req, res)).catch((err) => {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  });
 
-// GET /expenses?category=...
-router.get('/', async (req, res) => {
-  try {
+export default function expenseRouter(repo) {
+  const router = express.Router();
+
+  // GET /expenses?category=...
+  router.get('/', handle(async (req, res) => {
     const { category } = req.query;
-    let result;
-    if (category) {
-      result = await pool.query('SELECT * FROM expense WHERE category = $1 ORDER BY created_at DESC', [category]);
-    } else {
-      result = await pool.query('SELECT * FROM expense ORDER BY created_at DESC');
+    if (category && !CATEGORIES.includes(category)) {
+      return res.status(400).json({ error: 'Invalid category', errors: { category: `Must be one of: ${CATEGORIES.join(', ')}` } });
     }
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
+    res.json(await repo.list({ category: category || undefined }));
+  }));
 
-// POST /expenses
-router.post('/', async (req, res) => {
-  try {
-    const { title, description, category, amount } = req.body;
-    if (!title || isNaN(amount)) {
-      return res.status(400).json({ error: 'Invalid input' });
-    }
-    const result = await pool.query(
-      'INSERT INTO expense (title, description, category, amount) VALUES ($1,$2,$3,$4) RETURNING *',
-      [title, description, category, amount]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
+  // GET /expenses/summary → { total, count, byCategory }
+  router.get('/summary', handle(async (_req, res) => {
+    res.json(await repo.summary());
+  }));
 
-// PUT /expenses/:id
-router.put('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { title, description, category, amount } = req.body;
-    if (!title || isNaN(amount)) {
-      return res.status(400).json({ error: 'Invalid input' });
-    }
-    const result = await pool.query(
-      'UPDATE expense SET title=$1, description=$2, category=$3, amount=$4 WHERE id=$5 RETURNING *',
-      [title, description, category, amount, id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
+  // POST /expenses
+  router.post('/', handle(async (req, res) => {
+    const v = validateExpense(req.body);
+    if (!v.ok) return res.status(400).json({ error: 'Invalid input', errors: v.errors });
+    res.status(201).json(await repo.create(v.value));
+  }));
 
-// DELETE /expenses/:id
-router.delete('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await pool.query('DELETE FROM expense WHERE id=$1 RETURNING *', [id]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+  // PUT /expenses/:id
+  router.put('/:id', handle(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'Invalid id' });
+    const v = validateExpense(req.body);
+    if (!v.ok) return res.status(400).json({ error: 'Invalid input', errors: v.errors });
+    const updated = await repo.update(id, v.value);
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
+  }));
+
+  // DELETE /expenses/:id
+  router.delete('/:id', handle(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'Invalid id' });
+    if (!(await repo.remove(id))) return res.status(404).json({ error: 'Not found' });
     res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
+  }));
 
-export default router;
+  return router;
+}

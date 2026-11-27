@@ -1,21 +1,23 @@
-import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
-import expenseRoutes from './routes/expenses.js';
+import { createApp } from './app.js';
+import { createMemoryRepo, createPgRepo } from './repository.js';
 
 dotenv.config();
-const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
-app.use(express.json());
+let repo;
+if (process.env.DATABASE_URL) {
+  const { default: pool } = await import('./db.js');
+  repo = createPgRepo(pool);
+} else {
+  console.warn('DATABASE_URL not set: using an in-memory store (data resets on restart).');
+  repo = createMemoryRepo([
+    { title: 'Groceries', category: 'Food', amount: 64.2 },
+    { title: 'Bus pass', category: 'Transport', amount: 45 },
+    { title: 'Electricity bill', category: 'Utilities', amount: 88.5 },
+  ]);
+}
 
-app.use('/expenses', expenseRoutes);
-
-app.get('/', (req, res) => {
-  res.send('Expense tracker API');
-});
-
-app.listen(PORT, () => {
+createApp(repo).listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
